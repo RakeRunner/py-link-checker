@@ -1,0 +1,41 @@
+# maximum number of concurrent checks
+max_parallel_checks: 3
+
+# list of sites/pages to check
+sites:
+- domain: "www.google.com"
+  # by default, the script connects to the sites by https, but for a specific domain, you can choose to connect to http
+  http: true
+  # you can add multiple pages at once
+  urls:
+    - uri: "/"
+      check_text: "Google"
+    - uri: "/analytics/"
+      check_text: "Google Analytics"
+
+# - domain: "branchup.pro"
+#   urls:
+#     - uri: "/"
+#       check_text: "some text of front page..."
+# ...
+
+# logger settings
+logger:
+  # log level: DEBUG / INFO / ERROR
+  level: 'INFO'
+  log_to_screen: true
+  log_to_file: false
+  log_file_path: 'log.txt'
+
+# email list for notifications
+administration:
+  - email: "some-admin-email@gmail.com"
+  - email: "some-admin2-email@gmail.com"
+
+# configuring smtp through which the script will send mail
+smtp_notifi:
+  enabled: false
+  host: "smtp.gmail.com"
+  # port: 587
+  username: "someuser@gmail.com"
+  password: "some-password-here"
