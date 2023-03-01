@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 
-import yaml
 import asyncio
-import aiohttp
-import aiosmtplib
-from email.mime.text import MIMEText
+import logging
 import os
 import sys
-import logging
+import smtplib
+import requests
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import aiohttp
+import yaml
+
 
 # sends a notification by all means specified in the config
 async def notifi(site, errors):
 	text = ''
+	mail_text = ''
 
 	# we form the text of the notice
 	text += 'Domain: %s\n\n' % site['domain']
@@ -31,31 +35,32 @@ async def notifi(site, errors):
 			**config['smtp_notifi']
 		}
 
-		if type(smtp_notifi) is bool and smtp_notifi['enabled']:
-			emails = []
+		if smtp_notifi['enabled']:
+			emails = ''
 			if 'administration' in config:
 				for admin in config['administration']:
 					if 'email' in admin:
-						emails.append(admin['email'])
+						emails = emails + admin['email'] + ','
 			if len(emails) > 0:
-				smtp = aiosmtplib.SMTP(hostname=smtp_notifi['host'], port=smtp_notifi['port'], loop=loop, use_tls=False)
+				smtp = smtplib.SMTP_SSL(smtp_notifi['host'], smtp_notifi['port'])
 
 				mail_text += '---------------------------\n\n'
 				mail_text += text
 				mail_text += '---------------------------'
 
-				await smtp.connect()
-				await smtp.starttls()
-				await smtp.auth_login(smtp_notifi['username'], smtp_notifi['password'])
-
-				message = MIMEText(mail_text)
-				message['From'] = 'info@branchup.pro'
+				message = MIMEMultipart()
+				message['From'] = 'homusv@mail.ru'
+				message['To'] = emails
 				message['Subject'] = 'SITE PROBLEM - %s (errors:%s)' % (site['domain'], len(errors))
+				message.attach(MIMEText(mail_text, 'plain'))
 
-				await smtp.send_message(message, recipients=emails)
+				smtp.login(smtp_notifi['username'], smtp_notifi['password'])
+				smtp.send_message(message, smtp_notifi['username'], emails)
+				smtp.quit()
 
 async def check_site(site):
-	with await sem:
+	headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.5414.75 Safari/537.36'}
+	async with sem:
 		if 'urls' not in site:
 			site['urls'] = [{'uri':'/'}]
 
@@ -83,18 +88,18 @@ async def check_site(site):
 
 			try:
 				async with aiohttp.ClientSession() as session:
-					async with session.get(url, verify_ssl=False) as response:
+					async with session.get(url, verify_ssl=False, headers=headers) as response:
 						html = await response.text()
 
 						if response.status != 200:
-							errors.append({
-								'url': url,
-								'message': 'Bad site status: %s' % response.status
-								})
+							#errors.append({
+							#	'url': url,
+							#	'message': 'Bad site status: %s' % response.status
+							#	})
 							continue
 						else:
 							if 'check_text' in uri_info:
-								if uri_info['check_text'] not in html:
+								if uri_info['check_text'] not in html and 'captcha' not in html:
 									errors.append({
 										'url': url,
 										'message': 'Cant find text: "%s"' % uri_info['check_text']
@@ -136,8 +141,8 @@ if __name__ == '__main__':
 
 	# main config load
 	config = {}
-	with open(CONFIG_PATH, 'r') as f:
-		config = yaml.load(f)
+	with open(CONFIG_PATH, 'r', encoding='utf8') as f:
+		config = yaml.safe_load(f)
 
 	if 'logger' not in config:
 		config['logger'] = {}
